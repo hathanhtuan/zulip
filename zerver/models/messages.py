@@ -52,6 +52,8 @@ class AbstractMessage(models.Model):
     # The raw Markdown-format text (E.g., what the user typed into the compose box).
     content = models.TextField()
 
+    translated_content = models.JSONField(null=True)
+    prefer_language = models.TextField(default="en")
     # The HTML rendered content resulting from rendering the content
     # with the Markdown processor.
     rendered_content = models.TextField(null=True)

@@ -1,3 +1,4 @@
+import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from typing import (
 )
 
 import orjson
+import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -110,6 +112,7 @@ from zerver.models.scheduled_jobs import NotificationTriggers
 from zerver.models.streams import get_stream, get_stream_by_id_in_realm
 from zerver.models.users import get_system_bot, get_user_by_delivery_email, is_cross_realm_bot_email
 from zerver.tornado.django_api import send_event_on_commit
+from zerver.dosiin.helper import dosiin_translate
 
 
 def compute_irc_user_fullname(email: str) -> str:
@@ -869,6 +872,8 @@ def do_send_messages(
 
     # Claim attachments in message
     for send_request in send_message_requests:
+        # print("---| message_send.do_send_message: ", send_request.message, send_request.message.prefer_language)
+
         if do_claim_attachments(
             send_request.message, send_request.rendering_result.potential_attachment_path_ids
         ):
@@ -1045,6 +1050,7 @@ def do_send_messages(
             id: int
             flags: List[str]
             mentioned_user_group_id: Optional[int]
+            user_language: str
 
         users: List[UserData] = []
         for user_id in user_list:
@@ -1056,7 +1062,14 @@ def do_send_messages(
             # been updated to access `stream_wildcard_mentioned`.
             if "stream_wildcard_mentioned" in flags or "topic_wildcard_mentioned" in flags:
                 flags.append("wildcard_mentioned")
-            user_data: UserData = dict(id=user_id, flags=flags, mentioned_user_group_id=None)
+            user_profile = UserProfile.objects.get(id=user_id)
+            user_data: UserData = dict(
+                id=user_id,
+                flags=flags,
+                mentioned_user_group_id=None,
+                user_language=user_profile.default_language
+            )
+
 
             if user_id in send_request.mentioned_user_groups_map:
                 user_data["mentioned_user_group_id"] = send_request.mentioned_user_groups_map[
@@ -1382,6 +1395,7 @@ def check_send_message(
     read_by_sender: bool = False,
 ) -> SentMessageResult:
     addressee = Addressee.legacy_build(sender, recipient_type_name, message_to, topic_name)
+    # print('addressee', addressee)
     try:
         message = check_message(
             sender,
@@ -1637,6 +1651,7 @@ def check_message(
 
     recipients_for_user_creation_events = None
     if addressee.is_stream():
+        # print('addressee.topic_name()', addressee.topic_name())
         topic_name = addressee.topic_name()
         topic_name = truncate_topic(topic_name)
 
@@ -1682,6 +1697,7 @@ def check_message(
 
     elif addressee.is_private():
         user_profiles = addressee.user_profiles()
+        # print('user_profiles', user_profiles)
         mirror_message = client.name in [
             "zephyr_mirror",
             "irc_mirror",
@@ -1716,6 +1732,18 @@ def check_message(
     message = Message()
     message.sender = sender
     message.content = message_content
+
+    # send request to dosi-in translation server
+    translate_result = dosiin_translate(message_content)
+
+    if "data" in translate_result:
+
+        message.translated_content = json.dumps({
+            'language_vn': f'{translate_result["data"]["Vietnamese"]}',
+            'language_en': f'{translate_result["data"]["English"]}',
+            'language_kr': f'{translate_result["data"]["Korean"]}',
+            'language_cn': f'{translate_result["data"]["Chinese"]}'
+        })
     message.recipient = recipient
     message.realm = realm
     if addressee.is_stream():

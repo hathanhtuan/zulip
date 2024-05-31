@@ -321,6 +321,7 @@ def json_change_settings(
         or notification_sound is not None
         or email_notifications_batching_period_seconds is not None
     ):
+        # print("---| default language", default_language)
         check_settings_values(
             notification_sound, email_notifications_batching_period_seconds, default_language
         )
@@ -393,6 +394,7 @@ def json_change_settings(
 
     # Loop over user_profile.property_types
     request_settings = {k: v for k, v in locals().items() if k in user_profile.property_types}
+    # print("---| request_settings: ", request_settings)
     for k, v in request_settings.items():
         if v is not None and getattr(user_profile, k) != v:
             do_change_user_setting(user_profile, k, v, acting_user=user_profile)

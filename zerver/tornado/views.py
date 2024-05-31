@@ -1,3 +1,4 @@
+import json
 import time
 from typing import Any, Callable, Mapping, Optional, Sequence, TypeVar
 
@@ -238,6 +239,32 @@ def get_events_backend(
         handler_id=handler_id,
         new_queue_data=new_queue_data,
     )
+
+
+
+    if result["type"] == "response":
+        events = result["response"]["events"]
+        for event in events:
+            if event["type"] == "message" and "translated_content" in event['message']:
+                # print("---| views: ", event)
+                # event["message"]["content"] = (f"translated message "
+                #                                f"for {user_profile.full_name}: "
+                #                                f"{event['message']['content']}")
+                # event["message"]["content"] = \
+                #     f"{json.loads(event['message']['translated_content'])['language_kr']}"
+                translated_text = event["message"]["content"]
+                translated_content = json.loads(event['message']['translated_content'])
+                if user_profile.default_language == "en" and "language_en" in translated_content:
+                    translated_text = translated_content["language_en"]
+                elif user_profile.default_language == "vi" and "language_vn" in translated_content:
+                    translated_text = translated_content["language_vn"]
+                elif user_profile.default_language == "ko" and "language_kr" in translated_content:
+                    translated_text = translated_content["language_kr"]
+                elif user_profile.default_language == "zh-hans" and "language_cn" in translated_content:
+                    translated_text = translated_content["language_cn"]
+                event["message"]["content"] = translated_text
+
+    # print("\n\n\n---| views.get_events_backend", result, "\n\n\n")
     if "extra_log_data" in result:
         log_data = RequestNotes.get_notes(request).log_data
         assert log_data is not None
@@ -250,4 +277,5 @@ def get_events_backend(
         return AsynchronousResponse()
     if result["type"] == "error":
         raise result["exception"]
+
     return json_success(request, data=result["response"])

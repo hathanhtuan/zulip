@@ -616,7 +616,9 @@ class UserProfile(AbstractBaseUser, PermissionsMixin, UserBaseSettings):
         }
         data: ProfileData = []
         for field in custom_profile_fields_for_realm(self.realm_id):
+
             field_values = user_data.get(field.id, None)
+            # print("---| field data: ", field.id, field_values)
             if field_values:
                 value, rendered_value = (
                     field_values.get("value"),

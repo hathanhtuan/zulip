@@ -29,6 +29,7 @@ def send_notification_backend(
     stream_id: Optional[int] = REQ(json_validator=check_int, default=None),
     topic: Optional[str] = REQ("topic", default=None),
 ) -> HttpResponse:
+    # print('notification_to', notification_to)
     recipient_type_name = req_type
     if recipient_type_name == "channel":
         # For now, use "stream" from Message.API_RECIPIENT_TYPES.

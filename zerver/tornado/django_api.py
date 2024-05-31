@@ -180,6 +180,8 @@ def send_event(
 ) -> None:
     """`users` is a list of user IDs, or in some special cases like message
     send/update or embeds, dictionaries containing extra data."""
+
+    # print("---| django_api.send_event: ", users)
     realm_ports = get_realm_tornado_ports(realm)
     if len(realm_ports) == 1:
         port_user_map = {realm_ports[0]: list(users)}

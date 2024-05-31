@@ -1,3 +1,4 @@
+import datetime
 from email.headerregistry import Address
 from typing import Dict, Iterable, Optional, Sequence, Union, cast
 
@@ -234,6 +235,7 @@ def send_message_backend(
         read_by_sender = client.default_read_by_sender()
 
     data: Dict[str, int] = {}
+    # message_content = message_content[::-1] + f" - translated at {datetime.datetime.now()}"
     sent_message_result = check_send_message(
         sender,
         client,

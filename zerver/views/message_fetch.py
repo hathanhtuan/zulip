@@ -1,3 +1,4 @@
+import json
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 from django.conf import settings
@@ -268,6 +269,24 @@ def get_messages_backend(
             realm=realm,
         )
 
+    # retrieve profile's language
+    # print("---| user profile", user_profile.default_language)
+
+    for message in message_list:
+        if 'translated_content' in message and message['translated_content']:
+            translated_text = message["content"]
+            translated_content = json.loads(message["translated_content"])
+            if user_profile.default_language == "en" and "language_en" in translated_content:
+                translated_text = translated_content["language_en"]
+            elif user_profile.default_language == "vi" and "language_vn" in translated_content:
+                translated_text = translated_content["language_vn"]
+            elif user_profile.default_language == "ko" and "language_kr" in translated_content:
+                translated_text = translated_content["language_kr"]
+            elif user_profile.default_language == "zh-hans" and "language_cn" in translated_content:
+                translated_text = translated_content["language_cn"]
+            message["content"] = translated_text
+
+    # print("---call fetch---", user_profile)
     ret = dict(
         messages=message_list,
         result="success",
@@ -278,6 +297,10 @@ def get_messages_backend(
         history_limited=query_info.history_limited,
         anchor=anchor,
     )
+    # print(message_list[0])
+    # for message in message_list:
+    #     print("--------------------------")
+    #     print(message)
     return json_success(request, data=ret)
 
 

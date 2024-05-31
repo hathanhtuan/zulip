@@ -1,6 +1,7 @@
 # See https://zulip.readthedocs.io/en/latest/subsystems/events-system.html for
 # high-level documentation on how this system works.
 import copy
+import json
 import logging
 import os
 import random
@@ -46,7 +47,7 @@ from zerver.lib.narrow_predicate import build_narrow_predicate
 from zerver.lib.notification_data import UserMessageNotificationsData
 from zerver.lib.queue import queue_json_publish, retry_event
 from zerver.middleware import async_request_timer_restart
-from zerver.models import CustomProfileField
+from zerver.models import CustomProfileField, UserProfile
 from zerver.tornado.descriptors import clear_descriptor_by_handler_id, set_descriptor_by_handler_id
 from zerver.tornado.exceptions import BadEventQueueIdError
 from zerver.tornado.handlers import finish_handler, get_handler_by_id, handler_stats_string
@@ -208,11 +209,36 @@ class ClientDescriptor:
     def finish_current_handler(self) -> bool:
         if self.current_handler_id is None:
             return False
+
         try:
+            # user_profile = UserProfile.objects.get(id=self.user_profile_id)
+            # print("---| user_settings_object", self.user_profile_id)
+            contents = self.event_queue.contents()
+            found_message = False
+            for content in contents:
+                if content["type"] == "message":
+                    print("---| event_queue.finish_current_handler", content)
+                    found_message = True
+                    # print("---| event_queue: ", self.event_queue)
+                    if "translated_content" in content['message']:
+                        # content["message"]["content"] = \
+                        #     f"{json.loads(content['message']['translated_content'])['language_kr']}"
+                        translated_text = content["message"]["content"]
+                        translated_content = json.loads(content['message']['translated_content'])
+                        if content["user_data"]["user_language"] == "en" and "language_en" in translated_content:
+                            translated_text = translated_content["language_en"]
+                        elif content["user_data"]["user_language"] == "vi" and "language_vn" in translated_content:
+                            translated_text = translated_content["language_vn"]
+                        elif content["user_data"]["user_language"] == "ko" and "language_kr" in translated_content:
+                            translated_text = translated_content["language_kr"]
+                        elif content["user_data"]["user_language"] == "zh-hans" and "language_cn" in translated_content:
+                            translated_text = translated_content["language_cn"]
+                        content["message"]["content"] = translated_text
+
             finish_handler(
                 self.current_handler_id,
                 self.event_queue.id,
-                self.event_queue.contents(),
+                contents,
             )
         except Exception:
             logging.exception(
@@ -427,7 +453,7 @@ class EventQueue:
 
         self.virtual_events = {}
         self.queue = deque(contents)
-
+        # print("---| EventQueue.contents: ", contents)
         if include_internal_data:
             return contents
         return prune_internal_data(contents)
@@ -1041,7 +1067,7 @@ def process_message_event(
     for high-level documentation on this subsystem.
     """
     send_to_clients = get_client_info_for_message_event(event_template, users)
-
+    # print("---| process_message_event: ", users)
     presence_idle_user_ids = set(event_template.get("presence_idle_user_ids", []))
     online_push_user_ids = set(event_template.get("online_push_user_ids", []))
 
@@ -1130,8 +1156,9 @@ def process_message_event(
 
     # Extra user-specific data to include
     extra_user_data: Dict[int, Any] = {}
-
+    # print("---| users length: ", len(users))
     for user_data in users:
+        # print("---| user_data: ", user_data)
         user_profile_id: int = user_data["id"]
         flags: Collection[str] = user_data.get("flags", [])
         mentioned_user_group_id: Optional[int] = user_data.get("mentioned_user_group_id")
@@ -1168,6 +1195,8 @@ def process_message_event(
         internal_data.pop("user_id")
         internal_data["mentioned_user_group_id"] = mentioned_user_group_id
         extra_user_data[user_profile_id] = dict(internal_data=internal_data)
+        extra_user_data[user_profile_id]["user_data"] = user_data
+        # print("---| extra user data: ", extra_user_data)
 
         # If the message isn't notifiable had the user been idle, then the user
         # shouldn't receive notifications even if they were online. In that case we can
@@ -1189,12 +1218,13 @@ def process_message_event(
             )
         )
 
+    # print(extra_user_data)
     for client_data in send_to_clients.values():
         client = client_data["client"]
         flags = client_data["flags"]
         is_sender: bool = client_data.get("is_sender", False)
         extra_data: Optional[Mapping[str, bool]] = extra_user_data.get(client.user_profile_id, None)
-
+        # print("---| event_queue.process_message_event: ", extra_data["user_data"])
         if not client.accepts_messages():
             # The actual check is the accepts_event() check below;
             # this line is just an optimization to avoid copying
